@@ -66,8 +66,8 @@ class Invoice(db.Model):
     
     # Relationships
     department = db.relationship('Department', backref='invoices', lazy=True)
-    uploader = db.relationship('User', foreign_keys=[uploaded_by], lazy=True)
-    approver = db.relationship('User', foreign_keys=[approved_by], lazy=True)
+    uploader = db.relationship('User', foreign_keys=[uploaded_by], lazy=True, overlaps="uploaded_invoices")
+    approver = db.relationship('User', foreign_keys=[approved_by], lazy=True, overlaps="approved_invoices")
     notifications = db.relationship('Notification', backref='invoice', lazy=True)
     audit_logs = db.relationship('AuditLog', backref='invoice', lazy=True)
     
