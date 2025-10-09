@@ -39,8 +39,8 @@ A Flask-based web application for invoice extraction, management, and approval w
    ```env
    SECRET_KEY=your-secret-key-change-in-production
    JWT_SECRET_KEY=your-jwt-secret-key-change-in-production
-   SUPERADMIN_EMAIL=superadmin@smartinv.com
-   SUPERADMIN_PASSWORD=SuperAdmin123!
+   SUPERADMIN_EMAIL=smartinv@simonindia.ai
+   SUPERADMIN_PASSWORD=SuperAdmin123@
    OPENAI_API_KEY=your-openai-api-key-here
    ```
 
@@ -226,4 +226,5 @@ This project is proprietary software. All rights reserved.
 ## Support
 
 For support and questions, contact the development team.
+
 
