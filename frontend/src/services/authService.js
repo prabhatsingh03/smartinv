@@ -14,7 +14,11 @@ export async function login(email, password) {
 }
 export async function refreshToken() {
     try {
-        const res = await axios.post(`${config.authBaseUrl}/refresh`, {}, { withCredentials: true });
+        const refresh = localStorage.getItem('refreshToken');
+        const headers = {};
+        if (refresh)
+            headers.Authorization = `Bearer ${refresh}`;
+        const res = await axios.post(`${config.authBaseUrl}/refresh`, {}, { withCredentials: true, headers });
         const newAccess = res.data?.access_token;
         if (newAccess)
             localStorage.setItem('accessToken', newAccess);
