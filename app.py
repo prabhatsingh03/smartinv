@@ -21,10 +21,14 @@ def create_app(config_class=Config):
     # Initialize extensions with app
     db.init_app(app)
     jwt.init_app(app)
-    CORS(app)
+    # Configure CORS with proper settings
+    CORS(app, 
+         origins=app.config.get('CORS_ORIGINS', ['*']),
+         supports_credentials=True,
+         allow_headers=['Content-Type', 'Authorization'],
+         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
     
-    # Configure JWT settings
-    app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+    # JWT settings are configured in config.py - no need to override here
     
     # Create uploads directory if it doesn't exist
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
