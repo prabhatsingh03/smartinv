@@ -49,7 +49,8 @@ export function validateInvoice(values: InvoiceFormValues): ValidationErrorMap {
   errors.Line_Item = validateRequiredString(values.Line_Item, 'Line item');
   errors.HSN_SAC = validateRequiredString(values.HSN_SAC, 'HSN/SAC');
   errors.Invoice_Number = validateRequiredString(values.Invoice_Number, 'Invoice number');
-  errors.Vendor_Name = validateRequiredString(values.Vendor_Name, 'Vendor name');
+  if (values.Vendor_Name && values.Vendor_Name.trim() !== '') {
+  }
   errors.GST_Number = validateGstNumber(values.GST_Number);
   errors.filename = validateRequiredString(values.filename, 'Filename');
 
@@ -73,5 +74,3 @@ export function validateInvoice(values: InvoiceFormValues): ValidationErrorMap {
   }
   return Object.fromEntries(Object.entries(errors).filter(([, v]) => !!v));
 }
-
-
