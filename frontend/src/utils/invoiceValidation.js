@@ -52,7 +52,10 @@ export function validateInvoice(values) {
     errors.Line_Item = validateRequiredString(values.Line_Item, 'Line item');
     errors.HSN_SAC = validateRequiredString(values.HSN_SAC, 'HSN/SAC');
     errors.Invoice_Number = validateRequiredString(values.Invoice_Number, 'Invoice number');
-    errors.Vendor_Name = validateRequiredString(values.Vendor_Name, 'Vendor name');
+    // Vendor_Name is now optional - only validate if provided
+    if (values.Vendor_Name && values.Vendor_Name.trim() !== '') {
+        // Optional validation for vendor name if provided
+    }
     errors.GST_Number = validateGstNumber(values.GST_Number);
     errors.filename = validateRequiredString(values.filename, 'Filename');
     // Date required ISO
