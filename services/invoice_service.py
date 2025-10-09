@@ -316,10 +316,15 @@ class InvoiceService:
         errors = []
         
         # Required fields validation
-        required_fields = ['invoice_number', 'vendor_name', 'total_amount']
+        required_fields = ['invoice_number', 'total_amount']
         for field in required_fields:
             if not data.get(field):
                 errors.append(f"Missing required field: {field}")
+        
+        # Vendor name is now optional - only validate if provided
+        if data.get('vendor_name') and data['vendor_name'].strip() == '':
+            # If vendor_name is provided but empty, set it to None
+            data['vendor_name'] = None
         
         # Amount validation
         if data.get('total_amount'):
