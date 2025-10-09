@@ -75,8 +75,8 @@ python run.py --reset-db --seed-sample
 ### Default Credentials
 
 - **Super Admin**:
-  - Email: `superadmin@smartinv.com`
-  - Password: `SuperAdmin123!`
+  - Email: `admin@simonindia.ai`
+  - Password: `SuperAdmin123@`
   - Username: `superadmin`
 
 ### API Endpoints
@@ -226,3 +226,4 @@ This project is proprietary software. All rights reserved.
 ## Support
 
 For support and questions, contact the development team.
+
