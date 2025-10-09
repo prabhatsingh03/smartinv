@@ -13,6 +13,9 @@ class Config:
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
     JWT_BLACKLIST_ENABLED = True
     JWT_BLACKLIST_TOKEN_CHECKS = ['access', 'refresh']
+    JWT_TOKEN_LOCATION = ['headers', 'cookies']
+    JWT_COOKIE_SECURE = False  # Set to True in production with HTTPS
+    JWT_COOKIE_CSRF_PROTECT = False  # Set to True if you want CSRF protection
     
     # File Upload Configuration
     UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
@@ -62,6 +65,13 @@ class ProductionConfig(Config):
     OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
     SUPERADMIN_EMAIL = os.environ.get('SUPERADMIN_EMAIL')
     SUPERADMIN_PASSWORD = os.environ.get('SUPERADMIN_PASSWORD')
+    
+    # Production-specific JWT settings
+    JWT_COOKIE_SECURE = True  # Enable for HTTPS
+    JWT_COOKIE_CSRF_PROTECT = True  # Enable CSRF protection
+    
+    # CORS settings for production
+    CORS_ORIGINS = os.environ.get('CORS_ORIGINS', 'https://yourdomain.com').split(',')
 
 class TestingConfig(Config):
     """Testing configuration."""
