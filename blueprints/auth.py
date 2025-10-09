@@ -199,12 +199,23 @@ def refresh():
             }
         )
         
+        # Log token refresh
+        from app import db
+        audit_log = AuditLog.log_system_action(
+            user_id=user.id,
+            action=AuditLog.ACTION_LOGIN,  # Using LOGIN as closest action
+            remarks=f"Token refreshed for user {user.username}"
+        )
+        db.session.add(audit_log)
+        db.session.commit()
+        
         return jsonify({
             'message': 'Token refreshed successfully',
             'access_token': access_token
         }), 200
         
     except Exception as e:
+        current_app.logger.error(f'Token refresh error: {str(e)}')
         return jsonify({'message': f'Token refresh error: {str(e)}'}), 500
 
 @auth_bp.route('/profile', methods=['GET'])
