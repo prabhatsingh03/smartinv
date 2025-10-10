@@ -1,4 +1,6 @@
 import axios from 'axios';
+import { getAppStore } from '../store/storeRef';
+import { setAccessToken, clearAccessToken } from '../store/authSlice';
 import type { ApiResponse, Invoice, SystemStatistics, AuditLog, AuditStatistics, PagedResult, User } from '@types';
 
 function decodeJwt<T = any>(token: string | null): T | null {
@@ -72,6 +74,7 @@ api.interceptors.response.use(
         );
         const newAccess = data.access_token as string;
         localStorage.setItem('access_token', newAccess);
+        getAppStore()?.dispatch(setAccessToken(newAccess));
         refreshQueue.forEach((fn) => fn(newAccess));
         refreshQueue = [];
         original.headers = original.headers || {};
@@ -80,6 +83,10 @@ api.interceptors.response.use(
       } finally {
         isRefreshing = false;
       }
+    }
+    if (error?.response?.status === 401) {
+      // ensure state reflects logged-out when refresh fails
+      getAppStore()?.dispatch(clearAccessToken());
     }
     return Promise.reject(error);
   }
@@ -298,3 +305,4 @@ export async function activateUser(userId: number) {
   const res = await api.post(`/users/${userId}/activate`, {});
   return res.data as { message: string };
 }
+
