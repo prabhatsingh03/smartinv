@@ -8,7 +8,7 @@ type AuthState = {
 };
 
 const initialState: AuthState = {
-  accessToken: localStorage.getItem('accessToken'),
+  accessToken: localStorage.getItem('access_token'),
   loading: false,
   error: null
 };
@@ -51,5 +51,3 @@ const authSlice = createSlice({
 });
 
 export default authSlice.reducer;
-
-
