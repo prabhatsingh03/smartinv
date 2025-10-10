@@ -1,6 +1,4 @@
 import axios from 'axios';
-import { config } from '@config/index';
-import { refreshToken as refreshAccessToken } from '@services/authService';
 import type { ApiResponse, Invoice, SystemStatistics, AuditLog, AuditStatistics, PagedResult, User } from '@types';
 
 function decodeJwt<T = any>(token: string | null): T | null {
@@ -14,21 +12,24 @@ function decodeJwt<T = any>(token: string | null): T | null {
 }
 
 const api = axios.create({
-  baseURL: '', // Use empty base URL to rely on Vite proxy
+  baseURL: '/api', // same-origin via Nginx
   // Header-based JWT; no cookies
   withCredentials: false
 });
+
+let isRefreshing = false;
+let refreshQueue: Array<(t: string) => void> = [];
 
 // Normalize URLs to avoid duplicate "/api/api" when endpoints already include "/api"
 api.interceptors.request.use((cfg) => {
   const url = cfg.url || '';
   // No need to normalize since we're using empty base URL and Vite proxy
   // Attach department_id by default for invoice endpoints (except file upload and update which need different handling)
-  const isInvoiceEndpoint = url.startsWith('/api/invoices') && 
-    !url.startsWith('/api/invoices/upload') && 
-    !url.match(/\/api\/invoices\/\d+$/); // Exclude individual invoice update endpoints
+  const isInvoiceEndpoint = url.startsWith('/invoices') && 
+    !url.startsWith('/invoices/upload') && 
+    !url.match(/\/invoices\/\d+$/); // Exclude individual invoice update endpoints
   if (isInvoiceEndpoint) {
-    const token = localStorage.getItem('accessToken');
+    const token = localStorage.getItem('access_token');
     const decoded: any = decodeJwt(token);
     const role = decoded?.role;
     const departmentId = decoded?.department_id;
@@ -38,7 +39,7 @@ api.interceptors.request.use((cfg) => {
       cfg.params = { ...(cfg.params || {}), department_id: departmentId } as any;
     }
   }
-  const token = localStorage.getItem('accessToken');
+  const token = localStorage.getItem('access_token');
   if (token) {
     cfg.headers = cfg.headers || {};
     cfg.headers.Authorization = `Bearer ${token}`;
@@ -50,19 +51,35 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    if (error?.response?.status === 401 && !original._retry) {
       original._retry = true;
+
+      if (isRefreshing) {
+        const newToken = await new Promise<string>((resolve) => refreshQueue.push(resolve));
+        original.headers = original.headers || {};
+        original.headers.Authorization = `Bearer ${newToken}`;
+        return api(original);
+      }
+
+      isRefreshing = true;
       try {
-        const newToken = await refreshAccessToken();
-        if (newToken) {
-          original.headers = original.headers || {};
-          original.headers.Authorization = `Bearer ${newToken}`;
-          return api(original);
-        }
-      } catch {}
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      window.location.href = '/login';
+        const rt = localStorage.getItem('refresh_token');
+        if (!rt) throw new Error('No refresh token');
+        const { data } = await axios.post(
+          '/api/auth/refresh',
+          {},
+          { headers: { Authorization: `Bearer ${rt}` } }
+        );
+        const newAccess = data.access_token as string;
+        localStorage.setItem('access_token', newAccess);
+        refreshQueue.forEach((fn) => fn(newAccess));
+        refreshQueue = [];
+        original.headers = original.headers || {};
+        original.headers.Authorization = `Bearer ${newAccess}`;
+        return api(original);
+      } finally {
+        isRefreshing = false;
+      }
     }
     return Promise.reject(error);
   }
@@ -89,13 +106,13 @@ export async function uploadInvoiceFile(file: File, onProgress?: (p: number) => 
   formData.append('file', file);
   // Append department_id to form-data (backend expects it in body/form, not query params)
   try {
-    const token = localStorage.getItem('accessToken');
+    const token = localStorage.getItem('access_token');
     const decoded: any = decodeJwt(token);
     if (decoded?.department_id) {
       formData.append('department_id', String(decoded.department_id));
     }
   } catch {}
-  const res = await api.post<ApiResponse<{ item: any }>>('/api/invoices/upload', formData, {
+  const res = await api.post<ApiResponse<{ item: any }>>('/invoices/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
     onUploadProgress: (evt) => {
       if (onProgress && evt.total) {
@@ -115,7 +132,7 @@ export async function uploadInvoiceFile(file: File, onProgress?: (p: number) => 
 }
 
 export async function getInvoices(params: InvoiceListQuery = {}) {
-  const res = await api.get<ApiResponse<{ items: Invoice[]; meta?: any }>>('/api/invoices/', { params });
+  const res = await api.get<ApiResponse<{ items: Invoice[]; meta?: any }>>('/invoices/', { params });
   const normalizeInvoice = (inv: any) => {
     const data = inv?.invoice_data || {};
     return { ...data, ...inv, department: inv?.department_name };
@@ -127,7 +144,7 @@ export async function getInvoices(params: InvoiceListQuery = {}) {
 }
 
 export async function getInvoice(id: number) {
-  const res = await api.get<ApiResponse<Invoice>>(`/api/invoices/${id}`);
+  const res = await api.get<ApiResponse<Invoice>>(`/invoices/${id}`);
   const normalizeInvoice = (inv: any) => {
     const data = inv?.invoice_data || {};
     return { ...data, ...inv, department: inv?.department_name };
@@ -140,19 +157,19 @@ export async function getInvoice(id: number) {
 }
 
 export async function updateInvoice(id: number, payload: Partial<Invoice>) {
-  const res = await api.put<ApiResponse<Invoice>>(`/api/invoices/${id}`, payload);
+  const res = await api.put<ApiResponse<Invoice>>(`/invoices/${id}`, payload);
   return res.data;
 }
 
 export async function deleteInvoice(id: number) {
-  const res = await api.delete<ApiResponse<{}>>(`/api/invoices/${id}`);
+  const res = await api.delete<ApiResponse<{}>>(`/invoices/${id}`);
   return res.data;
 }
 
 export async function submitInvoice(id: number) {
   console.log('submitInvoice API called with id:', id);
   try {
-    const res = await api.post<ApiResponse<Invoice>>(`/api/invoices/${id}/submit`, {});
+    const res = await api.post<ApiResponse<Invoice>>(`/invoices/${id}/submit`, {});
     console.log('submitInvoice API response:', res.data);
     return res.data;
   } catch (error) {
@@ -162,17 +179,17 @@ export async function submitInvoice(id: number) {
 }
 
 export async function approveInvoice(id: number, remarks?: string) {
-  const res = await api.post<ApiResponse<Invoice>>(`/api/invoices/${id}/approve`, { remarks });
+  const res = await api.post<ApiResponse<Invoice>>(`/invoices/${id}/approve`, { remarks });
   return res.data;
 }
 
 export async function rejectInvoice(id: number, remarks: string) {
-  const res = await api.post<ApiResponse<Invoice>>(`/api/invoices/${id}/reject`, { remarks });
+  const res = await api.post<ApiResponse<Invoice>>(`/invoices/${id}/reject`, { remarks });
   return res.data;
 }
 
 export async function listPending(params: InvoiceListQuery = {}) {
-  const res = await api.get<ApiResponse<{ items: Invoice[]; meta?: any }>>('/api/invoices/pending', { params });
+  const res = await api.get<ApiResponse<{ items: Invoice[]; meta?: any }>>('/invoices/pending', { params });
   const normalizeInvoice = (inv: any) => {
     const data = inv?.invoice_data || {};
     return { ...data, ...inv, department: inv?.department_name };
@@ -184,7 +201,7 @@ export async function listPending(params: InvoiceListQuery = {}) {
 }
 
 export async function listApproved(params: { page?: number; per_page?: number } = {}) {
-  const res = await api.get<ApiResponse<{ items: Invoice[]; meta?: any }>>('/api/invoices/approved', { params });
+  const res = await api.get<ApiResponse<{ items: Invoice[]; meta?: any }>>('/invoices/approved', { params });
   const normalizeInvoice = (inv: any) => {
     const data = inv?.invoice_data || {};
     return { ...data, ...inv, department: inv?.department_name };
@@ -196,19 +213,19 @@ export async function listApproved(params: { page?: number; per_page?: number } 
 }
 
 export async function getInvoiceStatistics() {
-  const res = await api.get<ApiResponse<any>>('/api/invoices/statistics');
+  const res = await api.get<ApiResponse<any>>('/invoices/statistics');
   return res.data;
 }
 
 export async function getInvoiceAuditLogs(id: number) {
-  const res = await api.get<ApiResponse<{ logs: any[] }>>(`/api/invoices/${id}/audit-logs`);
+  const res = await api.get<ApiResponse<{ logs: any[] }>>(`/invoices/${id}/audit-logs`);
   return res.data;
 }
 
 // Authenticated file download helper (attaches Authorization header)
 export async function downloadInvoiceFile(id: number) {
   // Return Blob so caller can open/save
-  const res = await api.get(`/api/invoices/${id}/file`, { responseType: 'blob' });
+  const res = await api.get(`/invoices/${id}/file`, { responseType: 'blob' });
   return res.data as Blob;
 }
 
@@ -224,32 +241,32 @@ export type AuditLogQuery = {
 };
 
 export async function getSystemStatistics() {
-  const res = await api.get<SystemStatistics>('/api/admin/statistics');
+  const res = await api.get<SystemStatistics>('/admin/statistics');
   return res.data;
 }
 
 export async function getAuditLogs(params: AuditLogQuery = {}) {
-  const res = await api.get<{ logs: AuditLog[] }>('/api/admin/audit-logs', { params });
+  const res = await api.get<{ logs: AuditLog[] }>('/admin/audit-logs', { params });
   return res.data.logs;
 }
 
 export async function getAuditStats() {
-  const res = await api.get<AuditStatistics>('/api/admin/audit-logs/statistics');
+  const res = await api.get<AuditStatistics>('/admin/audit-logs/statistics');
   return res.data;
 }
 
 export async function getComprehensiveReport() {
-  const res = await api.get<{ report: any }>('/api/admin/reports/comprehensive');
+  const res = await api.get<{ report: any }>('/admin/reports/comprehensive');
   return res.data.report;
 }
 
 export async function getSystemConfig() {
-  const res = await api.get<{ settings: Record<string, any> }>('/api/admin/config');
+  const res = await api.get<{ settings: Record<string, any> }>('/admin/config');
   return res.data.settings;
 }
 
 export async function updateSystemConfig(payload: Record<string, any>) {
-  const res = await api.put<{ message: string; applied: Record<string, any> }>('/api/admin/config', payload);
+  const res = await api.put<{ message: string; applied: Record<string, any> }>('/admin/config', payload);
   return res.data;
 }
 
@@ -257,27 +274,27 @@ export async function updateSystemConfig(payload: Record<string, any>) {
 export type UserListQuery = { page?: number; per_page?: number; role?: string; department_id?: number; search?: string };
 
 export async function listUsers(params: UserListQuery = {}) {
-  const res = await api.get('/api/users/', { params });
+  const res = await api.get('/users/', { params });
   const d = res.data as { users: User[]; total: number; pages: number; current_page: number; per_page: number };
   return { items: d.users, total: d.total, pages: d.pages, current_page: d.current_page, per_page: d.per_page } as PagedResult<User>;
 }
 
 export async function createUser(payload: Partial<User> & { password: string }) {
-  const res = await api.post('/api/users/', payload);
+  const res = await api.post('/users/', payload);
   return res.data as { user?: User; message: string };
 }
 
 export async function updateUser(userId: number, payload: Partial<User>) {
-  const res = await api.put(`/api/users/${userId}`, payload);
+  const res = await api.put(`/users/${userId}`, payload);
   return res.data as { user?: User; message: string };
 }
 
 export async function deactivateUser(userId: number) {
-  const res = await api.delete(`/api/users/${userId}`);
+  const res = await api.delete(`/users/${userId}`);
   return res.data as { message: string };
 }
 
 export async function activateUser(userId: number) {
-  const res = await api.post(`/api/users/${userId}/activate`, {});
+  const res = await api.post(`/users/${userId}/activate`, {});
   return res.data as { message: string };
 }
