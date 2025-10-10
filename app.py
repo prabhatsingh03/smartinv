@@ -21,10 +21,10 @@ def create_app(config_class=Config):
     # Initialize extensions with app
     db.init_app(app)
     jwt.init_app(app)
-    # Configure CORS with proper settings
-    CORS(app, 
-         origins=app.config.get('CORS_ORIGINS', ['*']),
-         supports_credentials=True,
+    # Configure CORS with explicit origin and no credentials (header-based JWT)
+    CORS(app,
+         origins=app.config.get('CORS_ORIGINS', ['https://smartinv.simonindia.ai']),
+         supports_credentials=False,
          allow_headers=['Content-Type', 'Authorization'],
          methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
     
