@@ -15,7 +15,8 @@ function decodeJwt<T = any>(token: string | null): T | null {
 
 const api = axios.create({
   baseURL: '', // Use empty base URL to rely on Vite proxy
-  withCredentials: true
+  // Header-based JWT; no cookies
+  withCredentials: false
 });
 
 // Normalize URLs to avoid duplicate "/api/api" when endpoints already include "/api"
@@ -280,4 +281,3 @@ export async function activateUser(userId: number) {
   const res = await api.post(`/api/users/${userId}/activate`, {});
   return res.data as { message: string };
 }
-
