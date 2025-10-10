@@ -5,8 +5,8 @@ import { Logout } from '@mui/icons-material';
 export default function LogoutButton() {
     const navigate = useNavigate();
     const onLogout = () => {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
         navigate('/login', { replace: true });
     };
     return (_jsx(Tooltip, { title: "Sign Out", children: _jsx(IconButton, { onClick: onLogout, sx: {
