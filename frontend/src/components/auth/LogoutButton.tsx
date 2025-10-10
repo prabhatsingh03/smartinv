@@ -5,8 +5,8 @@ import { Logout } from '@mui/icons-material';
 export default function LogoutButton() {
   const navigate = useNavigate();
   const onLogout = () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
     navigate('/login', { replace: true });
   };
   
@@ -30,5 +30,3 @@ export default function LogoutButton() {
     </Tooltip>
   );
 }
-
-
