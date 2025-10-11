@@ -6,8 +6,10 @@ import type { ApiResponse, Invoice, SystemStatistics, AuditLog, AuditStatistics,
 function decodeJwt<T = any>(token: string | null): T | null {
   if (!token) return null;
   try {
-    const payload = token.split('.')[1];
-    return JSON.parse(atob(payload));
+    const payload = token.split('.')[1] || '';
+    const b64 = payload.replace(/-/g, '+').replace(/_/g, '/')
+                      .padEnd(Math.ceil(payload.length/4)*4, '=');
+    return JSON.parse(atob(b64));
   } catch {
     return null;
   }
@@ -35,7 +37,8 @@ api.interceptors.request.use((config) => {
     const role = decoded?.role;
     const departmentId = decoded?.department_id;
     // For FINANCE and SUPER_ADMIN, do not auto-constrain by department to allow cross-department actions
-    const shouldAttachDept = departmentId && role !== 'FINANCE' && role !== 'SUPER_ADMIN';
+    const normalized = String(role || '').toUpperCase().replace(/\s+/g, '_');
+    const shouldAttachDept = departmentId && normalized !== 'FINANCE' && normalized !== 'SUPER_ADMIN';
     if (shouldAttachDept && (!config.params || typeof (config.params as any).department_id === 'undefined')) {
       config.params = { ...(config.params || {}), department_id: departmentId } as any;
     }
@@ -53,7 +56,7 @@ api.interceptors.response.use(
   async (err) => {
     const original = err.config;
     // Only try once per request
-    if (err?.response?.status === 401 && !original._retry) {
+    if (err?.response?.status === 401 && original && !original._retry) {
       original._retry = true;
 
       // If a refresh is in progress, wait for it and retry
@@ -313,4 +316,3 @@ export async function activateUser(userId: number) {
   const res = await api.post(`/users/${userId}/activate`, {});
   return res.data as { message: string };
 }
-
