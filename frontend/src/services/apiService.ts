@@ -14,81 +14,89 @@ function decodeJwt<T = any>(token: string | null): T | null {
 }
 
 const api = axios.create({
-  baseURL: '/api', // same-origin via Nginx
-  // Header-based JWT; no cookies
-  withCredentials: false
+  baseURL: '/api', // same-origin, Nginx proxies to Gunicorn
 });
 
-let isRefreshing = false;
-let refreshQueue: Array<(t: string) => void> = [];
-
-// Normalize URLs to avoid duplicate "/api/api" when endpoints already include "/api"
-api.interceptors.request.use((cfg) => {
-  const url = cfg.url || '';
-  // No need to normalize since we're using empty base URL and Vite proxy
+// Attach access token on every request
+api.interceptors.request.use((config) => {
+  const access = localStorage.getItem('access_token');
+  if (access) {
+    config.headers = config.headers || {};
+    config.headers['Authorization'] = `Bearer ${access}`;
+  }
+  
   // Attach department_id by default for invoice endpoints (except file upload and update which need different handling)
+  const url = config.url || '';
   const isInvoiceEndpoint = url.startsWith('/invoices') && 
     !url.startsWith('/invoices/upload') && 
     !url.match(/\/invoices\/\d+$/); // Exclude individual invoice update endpoints
   if (isInvoiceEndpoint) {
-    const token = localStorage.getItem('access_token');
-    const decoded: any = decodeJwt(token);
+    const decoded: any = decodeJwt(access);
     const role = decoded?.role;
     const departmentId = decoded?.department_id;
     // For FINANCE and SUPER_ADMIN, do not auto-constrain by department to allow cross-department actions
     const shouldAttachDept = departmentId && role !== 'FINANCE' && role !== 'SUPER_ADMIN';
-    if (shouldAttachDept && (!cfg.params || typeof (cfg.params as any).department_id === 'undefined')) {
-      cfg.params = { ...(cfg.params || {}), department_id: departmentId } as any;
+    if (shouldAttachDept && (!config.params || typeof (config.params as any).department_id === 'undefined')) {
+      config.params = { ...(config.params || {}), department_id: departmentId } as any;
     }
   }
-  const token = localStorage.getItem('access_token');
-  if (token) {
-    cfg.headers = cfg.headers || {};
-    cfg.headers.Authorization = `Bearer ${token}`;
-  }
-  return cfg;
+  
+  return config;
 });
 
+// Auto-refresh on 401 using the REFRESH TOKEN in Authorization header
+let isRefreshing = false;
+let queue: Array<(t: string) => void> = [];
+
 api.interceptors.response.use(
-  (res) => res,
-  async (error) => {
-    const original = error.config;
-    if (error?.response?.status === 401 && !original._retry) {
+  (r) => r,
+  async (err) => {
+    const original = err.config;
+    // Only try once per request
+    if (err?.response?.status === 401 && !original._retry) {
       original._retry = true;
 
+      // If a refresh is in progress, wait for it and retry
       if (isRefreshing) {
-        const newToken = await new Promise<string>((resolve) => refreshQueue.push(resolve));
+        const newAccess = await new Promise<string>((resolve) => queue.push(resolve));
         original.headers = original.headers || {};
-        original.headers.Authorization = `Bearer ${newToken}`;
+        original.headers['Authorization'] = `Bearer ${newAccess}`;
         return api(original);
       }
 
       isRefreshing = true;
       try {
-        const rt = localStorage.getItem('refresh_token');
-        if (!rt) throw new Error('No refresh token');
+        const refresh = localStorage.getItem('refresh_token');
+        if (!refresh) throw new Error('No refresh token');
+
+        // IMPORTANT: refresh token goes in Authorization header
         const { data } = await axios.post(
           '/api/auth/refresh',
           {},
-          { headers: { Authorization: `Bearer ${rt}` } }
+          { headers: { Authorization: `Bearer ${refresh}` } }
         );
-        const newAccess = data.access_token as string;
+
+        const newAccess = data.access_token;
         localStorage.setItem('access_token', newAccess);
         getAppStore()?.dispatch(setAccessToken(newAccess));
-        refreshQueue.forEach((fn) => fn(newAccess));
-        refreshQueue = [];
+
+        // Unblock queued requests
+        queue.forEach((fn) => fn(newAccess));
+        queue = [];
+
         original.headers = original.headers || {};
-        original.headers.Authorization = `Bearer ${newAccess}`;
+        original.headers['Authorization'] = `Bearer ${newAccess}`;
         return api(original);
       } finally {
         isRefreshing = false;
       }
     }
-    if (error?.response?.status === 401) {
+    
+    if (err?.response?.status === 401) {
       // ensure state reflects logged-out when refresh fails
       getAppStore()?.dispatch(clearAccessToken());
     }
-    return Promise.reject(error);
+    throw err;
   }
 );
 
