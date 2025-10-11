@@ -4,16 +4,14 @@ import type { AuthTokens } from '@types';
 export async function login(email: string, password: string): Promise<AuthTokens> {
   const res = await axios.post(
     `/api/auth/login`,
-    { username: email, password },
-    { withCredentials: false }
+    { username: email, password }
   );
   const tokens: AuthTokens = {
     access_token: res.data?.access_token,
     refresh_token: res.data?.refresh_token
   };
-  localStorage.setItem('access_token', tokens.access_token);
-  // Store refresh token in localStorage for header-based refresh
-  if (tokens.refresh_token) localStorage.setItem('refresh_token', tokens.refresh_token);
+  localStorage.setItem('access_token', tokens.access_token || '');
+  localStorage.setItem('refresh_token', tokens.refresh_token || '');
   return tokens;
 }
 
