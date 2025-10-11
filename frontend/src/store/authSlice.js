@@ -16,7 +16,14 @@ export const logout = createAsyncThunk('auth/logout', async () => {
 const authSlice = createSlice({
     name: 'auth',
     initialState,
-    reducers: {},
+    reducers: {
+        setAccessToken(state, action) {
+            state.accessToken = action.payload;
+        },
+        clearAccessToken(state) {
+            state.accessToken = null;
+        }
+    },
     extraReducers: (builder) => {
         builder
             .addCase(login.pending, (state) => {
@@ -36,4 +43,5 @@ const authSlice = createSlice({
         });
     }
 });
+export const { setAccessToken, clearAccessToken } = authSlice.actions;
 export default authSlice.reducer;
