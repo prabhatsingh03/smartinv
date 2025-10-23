@@ -1,0 +1,17 @@
+numpy
+Flask
+Flask-SQLAlchemy
+SQLAlchemy
+Flask-JWT-Extended
+Flask-CORS
+python-dateutil
+pandas
+openpyxl
+PyMuPDF
+pytesseract
+Pillow
+openai
+python-dotenv
+Werkzeug
+alembic
+gunicorn
