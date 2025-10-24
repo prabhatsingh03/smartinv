@@ -57,10 +57,10 @@ class InvoiceService:
             # Validate file
             self._validate_upload(file)
             
-            # Generate secure filename and organize file storage
+            # Generate secure filename and save to temporary storage
             filename = secure_filename(file.filename)
-            file_path = self.file_utils.organize_file_storage(
-                file, filename, department_id, user.id
+            file_path = self.file_utils.save_to_temp_storage(
+                file, filename, user.id
             )
             
             # Extract invoice data using existing logic
@@ -479,3 +479,116 @@ class InvoiceService:
         """Reject invoice with remarks."""
         invoice.reject(rejector_id, remarks)
         return invoice
+    
+    def move_to_permanent_storage(self, invoice: Invoice) -> bool:
+        """
+        Move invoice file from temporary to permanent storage.
+        This should be called when invoice status changes to draft or above.
+        
+        Args:
+            invoice: Invoice object
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if not invoice.file_path:
+                return False
+            
+            # Check if file is already in permanent storage
+            if not invoice.file_path.startswith(os.path.join(self.upload_folder, 'temp')):
+                return True  # Already in permanent storage
+            
+            # Get original filename from invoice
+            original_filename = invoice.filename or 'unknown.pdf'
+            
+            # Move to permanent storage
+            permanent_path = self.file_utils.move_to_permanent_storage(
+                invoice.file_path, 
+                original_filename, 
+                invoice.department_id, 
+                invoice.uploaded_by
+            )
+            
+            # Update invoice file_path in database
+            from app import db
+            invoice.file_path = permanent_path
+            db.session.commit()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error moving invoice {invoice.id} to permanent storage: {str(e)}")
+            return False
+    
+    def cleanup_temp_file(self, invoice: Invoice) -> bool:
+        """
+        Clean up temporary file for invoice.
+        This should be called when invoice is deleted or abandoned.
+        
+        Args:
+            invoice: Invoice object
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if not invoice.file_path:
+                return True
+            
+            # Only cleanup if file is in temp storage
+            if invoice.file_path.startswith(os.path.join(self.upload_folder, 'temp')):
+                return self.file_utils.cleanup_temp_file(invoice.file_path)
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error cleaning up temp file for invoice {invoice.id}: {str(e)}")
+            return False
+    
+    def cleanup_abandoned_invoices(self, hours_threshold: int = 24) -> int:
+        """
+        Clean up abandoned invoices (extracted status for too long) and their temp files.
+        
+        Args:
+            hours_threshold: Number of hours after which to consider an invoice abandoned
+            
+        Returns:
+            Number of invoices cleaned up
+        """
+        try:
+            from app import db
+            from datetime import datetime, timedelta
+            
+            # Find invoices that are still in extracted status and older than threshold
+            cutoff_time = datetime.utcnow() - timedelta(hours=hours_threshold)
+            
+            abandoned_invoices = Invoice.query.filter(
+                Invoice.status == Invoice.STATUS_EXTRACTED,
+                Invoice.is_saved == False,
+                Invoice.created_at < cutoff_time
+            ).all()
+            
+            cleaned_count = 0
+            for invoice in abandoned_invoices:
+                try:
+                    # Clean up temp file
+                    self.cleanup_temp_file(invoice)
+                    
+                    # Delete invoice record
+                    db.session.delete(invoice)
+                    cleaned_count += 1
+                    
+                except Exception as e:
+                    logger.error(f"Error cleaning up abandoned invoice {invoice.id}: {str(e)}")
+                    continue
+            
+            if cleaned_count > 0:
+                db.session.commit()
+                logger.info(f"Cleaned up {cleaned_count} abandoned invoices")
+            
+            return cleaned_count
+            
+        except Exception as e:
+            logger.error(f"Error in cleanup_abandoned_invoices: {str(e)}")
+            return 0
