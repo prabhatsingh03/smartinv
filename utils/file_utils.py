@@ -118,6 +118,111 @@ class FileUtils:
         
         return file_path
     
+    def save_to_temp_storage(
+        self, 
+        file: FileStorage, 
+        filename: str, 
+        user_id: int
+    ) -> str:
+        """
+        Save file to temporary storage location for processing.
+        Files in temp storage will be moved to permanent storage only when saved as draft or above.
+        
+        Args:
+            file: FileStorage object
+            filename: Original filename
+            user_id: User ID who uploaded
+            
+        Returns:
+            Path where file was saved temporarily
+        """
+        # Create temp directory structure: uploads/temp/user_id/
+        temp_dir = os.path.join(self.upload_folder, 'temp', str(user_id))
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # Generate unique filename with timestamp
+        name, ext = os.path.splitext(secure_filename(filename))
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        unique_filename = f"{name}_{timestamp}{ext}"
+        
+        temp_file_path = os.path.join(temp_dir, unique_filename)
+        
+        # Save file to temp location
+        file.save(temp_file_path)
+        
+        return temp_file_path
+    
+    def move_to_permanent_storage(
+        self, 
+        temp_file_path: str, 
+        filename: str, 
+        department_id: int, 
+        user_id: int
+    ) -> str:
+        """
+        Move file from temporary storage to permanent organized storage.
+        
+        Args:
+            temp_file_path: Path to temporary file
+            filename: Original filename
+            department_id: Department ID
+            user_id: User ID who uploaded
+            
+        Returns:
+            Path where file was moved to
+        """
+        if not os.path.exists(temp_file_path):
+            raise FileNotFoundError(f"Temporary file not found: {temp_file_path}")
+        
+        # Generate permanent file path
+        permanent_path = self.generate_file_path(filename, department_id, user_id)
+        
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(permanent_path), exist_ok=True)
+        
+        # Move file from temp to permanent location
+        import shutil
+        shutil.move(temp_file_path, permanent_path)
+        
+        # Clean up temp directory if empty
+        temp_dir = os.path.dirname(temp_file_path)
+        try:
+            if not os.listdir(temp_dir):
+                os.rmdir(temp_dir)
+        except OSError:
+            pass  # Directory not empty or permission error
+        
+        return permanent_path
+    
+    def cleanup_temp_file(self, temp_file_path: str) -> bool:
+        """
+        Clean up temporary file and directory if empty.
+        
+        Args:
+            temp_file_path: Path to temporary file
+            
+        Returns:
+            True if cleanup was successful
+        """
+        try:
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+                
+                # Clean up temp directory if empty
+                temp_dir = os.path.dirname(temp_file_path)
+                try:
+                    if not os.listdir(temp_dir):
+                        os.rmdir(temp_dir)
+                except OSError:
+                    pass  # Directory not empty or permission error
+                
+                return True
+            else:
+                # File doesn't exist, which means it's already cleaned up
+                return True
+        except Exception:
+            return False
+    
     def get_file_info(self, file_path: str) -> Optional[dict]:
         """
         Get file information.
