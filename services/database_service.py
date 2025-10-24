@@ -166,6 +166,18 @@ class DatabaseService:
 
             if changed:
                 invoice.updated_at = datetime.utcnow()
+                
+                # If status is changing to draft or above, move file to permanent storage
+                if 'status' in update_data and update_data['status'] in [Invoice.STATUS_DRAFT, Invoice.STATUS_PENDING, Invoice.STATUS_APPROVED]:
+                    from services.invoice_service import InvoiceService
+                    from flask import current_app
+                    
+                    service = InvoiceService(
+                        upload_folder=current_app.config['UPLOAD_FOLDER'],
+                        max_file_size=current_app.config['MAX_CONTENT_LENGTH']
+                    )
+                    service.move_to_permanent_storage(invoice)
+                
                 db.session.commit()
             else:
                 logger.info(f"No-op update for invoice {invoice_id}")
