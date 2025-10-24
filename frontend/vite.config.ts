@@ -5,7 +5,7 @@ import path from 'node:path';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const apiTarget = env.VITE_API_BASE_URL || 'http://0.0.0.0:5170';
+  const apiTarget = env.VITE_API_BASE_URL || 'http://127.0.0.1:5170';
 
   return {
     plugins: [react(), tsconfigPaths()],
