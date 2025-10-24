@@ -3,8 +3,15 @@ import { getAppStore } from '../store/storeRef';
 import { clearUser } from '../store/authSlice';
 import type { ApiResponse, Invoice, SystemStatistics, AuditLog, AuditStatistics, PagedResult, User } from '@types';
 
+// In production we want same-origin "/api"
+// In development we still call "/api", and Vite proxy forwards to Flask at 127.0.0.1:5170
+const base = import.meta.env.PROD
+  ? '/api'
+  : (import.meta.env.VITE_API_BASE_URL || '/api');
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ? `${import.meta.env.VITE_API_BASE_URL}/api` : 'http://localhost:5170/api',
+  baseURL: base,
+  withCredentials: false,
 });
 
 // Attach user email for simplified authentication
