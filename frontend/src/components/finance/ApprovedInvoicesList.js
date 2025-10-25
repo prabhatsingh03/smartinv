@@ -57,7 +57,7 @@ export default function ApprovedInvoicesList() {
                                         payload.amount_paid = Number(editAmount || 0);
                                     if (editStatus === 'DUE_PARTIAL' || editStatus === 'DUE_FULL')
                                         payload.paid_at = new Date().toISOString();
-                                    await api.put(`/api/invoices/${editId}`, payload);
+                                    await api.put(`invoices/${editId}`, payload);
                                     setEditOpen(false);
                                     load(params);
                                 }, children: "Save" })] })] })] }));
