@@ -145,7 +145,7 @@ export default function ApprovedInvoicesList() {
             const payload: any = { payment_status: editStatus };
             if (editStatus === 'DUE_PARTIAL') payload.amount_paid = Number(editAmount || 0);
             if (editStatus === 'DUE_PARTIAL' || editStatus === 'DUE_FULL') payload.paid_at = new Date().toISOString();
-            await api.put(`/api/invoices/${editId}`, payload);
+            await api.put(`invoices/${editId}`, payload);
             setEditOpen(false);
             load(params as any);
           }}>Save</Button>
@@ -154,5 +154,6 @@ export default function ApprovedInvoicesList() {
     </Stack>
   );
 }
+
 
 
